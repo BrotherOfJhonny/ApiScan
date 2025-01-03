@@ -13,7 +13,6 @@ Este script é uma ferramenta em Python projetada para automatizar a avaliação
 - **Análise de Erros**: Identifica respostas válidas mesmo em casos de erros HTTP 500.
 - **Geração de Relatório em HTML**: Resume os resultados dos testes em um relatório HTML detalhado e visualmente atrativo.
 - **Diretrizes OWASP**: Destaca vulnerabilidades comuns em APIs, como problemas de autenticação, autorização e validação de dados.
-- **Interatividade com Usuário**: Exibe um banner ASCII e uma mensagem de progresso animada durante a execução dos testes.
 
 ## Objetivos
 - Automatizar os testes de segurança em APIs para economizar tempo e melhorar a cobertura.
