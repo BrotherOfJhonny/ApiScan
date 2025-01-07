@@ -138,3 +138,6 @@ Este projeto está aberto para contribuições. Sinta-se à vontade para enviar 
 
 ### Referências
 [VulnAPI](http://vulnapi.testinvicti.com/)
+[rest_vulnweb](http://rest.vulnweb.com/docs/#api-GettingStarted-6/)
+
+
