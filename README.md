@@ -98,7 +98,6 @@ USE_PROXY = True  # Ative o proxy se necessário.
    ```bash
    python apiscan.py
    ```
-![inicio](/apiscan_inicio.png)
 
 2. **Siga as instruções fornecidas no terminal para:**
 Inserir a URL base da API.
