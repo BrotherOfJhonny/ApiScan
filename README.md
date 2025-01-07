@@ -90,7 +90,11 @@ PROXIES = {
     "https": "http://127.0.0.1:8080" ```
 }
 ```
+```
 USE_PROXY = True  # Ative o proxy se necessário.
+Caso use configuração padrão, é dada opção no inicio da execução do ApiScan
+```
+
 ![inicio](/apiscan_burp.png)
 ### 3. Execução
 
@@ -98,17 +102,22 @@ USE_PROXY = True  # Ative o proxy se necessário.
    ```bash
    python apiscan.py
    ```
+![inicio](/apiscan_inicio.png)
+
 
 2. **Siga as instruções fornecidas no terminal para:**
+  ```
 Inserir a URL base da API.
+Ativar uso do proxy. ( s = sim, n = não)
 Carregar o arquivo ou URL da especificação OpenAPI.
 Configurar o método de autenticação.
+  ```
 
 3. **Geração de Relatório:**
-
+  ```
 Após os testes, o script geraR.py será executado automaticamente.
 O relatório em HTML será gerado com os detalhes das rotas testadas.
-
+  ```
 Arquitetura do Projeto
 A estrutura do projeto está organizada da seguinte forma:
 ```
