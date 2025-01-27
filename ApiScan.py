@@ -1,197 +1,195 @@
 import requests
 import json
+import subprocess  # Para executar outro script Python
 from jinja2 import Template
 import urllib3
+import time
+import pandas as pd
 
 # Desativar avisos de HTTPS não verificado
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-# Configuração do proxy (exemplo: Burp Suite)
+# Configuração inicial do proxy (exemplo: Burp Suite)
 PROXIES = {
     "http": "http://127.0.0.1:8080",
     "https": "http://127.0.0.1:8080"
 }
 
-USE_PROXY = False  # Variável para (True)ativar/(False)desativar o proxy
+USE_PROXY = False  # Variável para ativar/desativar o proxy
 
-# Carregar a especificação OpenAPI
-def load_openapi_spec(file_path):
-    with open(file_path, 'r') as file:
-        return json.load(file)
+# Função para exibir o banner ASCII
+def display_banner():
+    banner = """
+     █████╗ ██████╗ ██╗███████╗ ██████╗ █████╗ ███╗   ██╗
+    ██╔══██╗██╔══██╗██║██╔════╝██╔════╝██╔══██╗████╗  ██║
+    ███████║██████╔╝██║███████╗██║     ███████║██╔██╗ ██║
+    ██╔══██║██╔═══╝ ██║╚════██║██║     ██╔══██║██║╚██╗██║
+    ██║  ██║██║     ██║███████║╚██████╗██║  ██║██║ ╚████║
+    ╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═══╝
+    """
+    print(banner)
 
-# Função para construir parâmetros automaticamente
-def build_params(args):
-    params = {}
-    if not args:
-        return params
+# Função para exibir a mensagem de "aguarde" com animação
+def display_loading_message():
+    message = "Executando testes, aguarde"
+    print(message, end="", flush=True)
+    for _ in range(3):
+        time.sleep(0.5)
+        print(".", end="", flush=True)
+    print("\n")
 
-    for param, details in args.items():
-        if "default" in details:
-            params[param] = details["default"]
-        elif "type" in details:
-            if details["type"] == "string":
-                params[param] = "example"
-            elif details["type"] == "integer":
-                params[param] = 1
-            elif details["type"] == "boolean":
-                params[param] = True
-            elif details["type"] == "array":
-                params[param] = []
-            elif details["type"] == "object":
-                params[param] = {}
-    return params
+# Função para carregar a especificação OpenAPI ou extrair de uma URL
+def load_openapi_spec(file_or_url):
+    if file_or_url.startswith("http://") or file_or_url.startswith("https://"):
+        print("Detectada URL. Verificando o tipo de resposta...")
+        response = requests.get(file_or_url, proxies=PROXIES if USE_PROXY else None, verify=False)
+        response.raise_for_status()
+
+        content_type = response.headers.get("Content-Type", "")
+        if "application/json" in content_type:
+            print("Resposta JSON detectada. Carregando especificação OpenAPI...")
+            return response.json().get("paths", {})
+        else:
+            print("[ERRO] O conteúdo retornado não é JSON. Verifique a URL fornecida.")
+            return None
+
+    else:
+        print("Carregando especificação OpenAPI de um arquivo local...")
+        with open(file_or_url, 'r') as file:
+            return json.load(file).get("paths", {})
+
+# Função para autenticação via login
+def login_for_token(base_url):
+    username = input("Digite o nome de usuário para login: ").strip()
+    password = input("Digite a senha: ").strip()
+    login_url = f"{base_url}/api/login"
+
+    try:
+        response = requests.post(
+            login_url,
+            json={"username": username, "password": password},
+            proxies=PROXIES if USE_PROXY else None,
+            verify=False
+        )
+        response.raise_for_status()
+        token = response.json().get("token")
+        if token:
+            print("Autenticação bem-sucedida. Token recebido.")
+            return {"Authorization": f"Bearer {token}"}
+        else:
+            print("Falha ao obter o token. Verifique suas credenciais.")
+            return None
+    except Exception as e:
+        print(f"Erro durante a autenticação: {e}")
+        return None
+
+# Função para configurar autenticação
+def configure_authentication(base_url):
+    auth_method = input("Escolha o método de autenticação (1: Nenhuma, 2: Token Bearer, 3: Login): ").strip()
+
+    if auth_method == "1":
+        return None
+    elif auth_method == "2":
+        token = input("Digite o token Bearer: ").strip()
+        return {"Authorization": f"Bearer {token}"}
+    elif auth_method == "3":
+        return login_for_token(base_url)
+    else:
+        print("Opção inválida. Nenhuma autenticação será usada.")
+        return None
+
+# Função para ativar/desativar o uso de proxy
+def configure_proxy():
+    global USE_PROXY
+    use_proxy_input = input("Deseja ativar o uso de proxy? (s/n): ").strip().lower()
+    if use_proxy_input == "s":
+        USE_PROXY = True
+        print("Proxy ativado.")
+    else:
+        USE_PROXY = False
+        print("Proxy desativado.")
 
 # Função para testar as rotas
-def test_api_routes(base_url, routes):
+def test_api_routes(base_url, paths, headers):
     results = []
+    raw_responses = []  # Lista para armazenar respostas brutas
 
-    for route, details in routes.items():
-        methods = details.get("methods", [])
-        endpoints = details.get("endpoints", [])
-        url = f"{base_url}{route}"
+    if not isinstance(paths, dict):
+        print("[ERRO] Nenhum endpoint encontrado para testar.")
+        return results
 
-        for endpoint in endpoints:
-            args = endpoint.get("args", {})
-            params = build_params(args)
+    print("Endpoints encontrados:")
+    for route, methods in paths.items():
+        print(f"Rota: {route}")
+        for method, details in methods.items():
+            print(f"  Método: {method}")
 
-            for method in methods:
-                method = method.upper()
+            # Preparar URL e parâmetros
+            params = {}
+            for param in details.get("parameters", []):
+                if param.get("in") == "path" and param.get("required"):
+                    params[param["name"]] = param.get("schema", {}).get("default", "1")
+                if param.get("in") == "query" and param.get("required"):
+                    params[param["name"]] = "test"
 
-                try:
-                    # Configurar a requisição com ou sem proxy
-                    request_kwargs = {
-                        "params": params if method == "GET" else None,
-                        "json": params if method in ["POST", "PUT", "PATCH", "DELETE"] else None,
-                        "proxies": PROXIES if USE_PROXY else None,
-                        "verify": False,
-                        "allow_redirects": True
-                    }
+            url = f"{base_url.rstrip('/')}/{route.lstrip('/').format(**params)}"
+            try:
+                request_kwargs = {
+                    "headers": headers,
+                    "proxies": PROXIES if USE_PROXY else None,
+                    "verify": False
+                }
+                print(f"[INFO] Testando endpoint: {method.upper()} {url}")
+                response = requests.request(method.upper(), url, **request_kwargs)
 
-                    if method == "GET":
-                        response = requests.get(url, **request_kwargs)
-                    elif method == "POST":
-                        response = requests.post(url, **request_kwargs)
-                    elif method == "PUT":
-                        response = requests.put(url, **request_kwargs)
-                    elif method == "PATCH":
-                        response = requests.patch(url, **request_kwargs)
-                    elif method == "DELETE":
-                        response = requests.delete(url, **request_kwargs)
-                    else:
-                        continue
+                results.append({
+                    "route": route,
+                    "method": method.upper(),
+                    "status_code": response.status_code,
+                    "response_time": response.elapsed.total_seconds(),
+                    "response": response.text
+                })
 
-                    # Analisar o cabeçalho da resposta
-                    if response.status_code == 301:
-                        new_url = response.headers.get("Location")
-                        if new_url:
-                            response = requests.get(new_url, **request_kwargs)
+                # Armazenar resposta bruta
+                raw_responses.append({
+                    "route": route,
+                    "method": method.upper(),
+                    "raw_response": response.text
+                })
 
-                    result = {
-                        "route": route,
-                        "method": method,
-                        "status_code": response.status_code,
-                        "response_time": response.elapsed.total_seconds(),
-                        "response": response.json() if response.headers.get("Content-Type", "").startswith("application/json") else response.text
-                    }
+            except Exception as e:
+                results.append({
+                    "route": route,
+                    "method": method.upper(),
+                    "error": str(e)
+                })
 
-                    # Validar possíveis problemas OWASP
-                    if response.status_code == 401:
-                        result["security_warning"] = "A rota requer autenticação."
-                    elif response.status_code == 403:
-                        result["security_warning"] = "Acesso não autorizado. Verificar permissões."
-                    elif response.status_code == 500:
-                        # Verificar se existe uma página válida apesar do erro 500
-                        if response.text:
-                            result["security_warning"] = "Erro interno no servidor, mas há conteúdo válido na resposta."
-                        else:
-                            result["security_warning"] = "Erro interno no servidor. Pode indicar validação de dados inadequada."
-
-                    results.append(result)
-
-                except Exception as e:
-                    results.append({
-                        "route": route,
-                        "method": method,
-                        "error": str(e)
-                    })
+    # Salvar respostas brutas em um arquivo local
+    with open("raw_responses.json", "w") as raw_file:
+        json.dump(raw_responses, raw_file, indent=4)
 
     return results
 
-# Função para gerar relatório HTML
-def generate_html_report(results, output_path):
-    html_template = """
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>APISCAN Test Report</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .success { color: green; }
-            .failure { color: red; }
-        </style>
-    </head>
-    <body>
-        <h1>API Test Report</h1>
-        <table>
-            <thead>
-                <tr>
-                    <th>Route</th>
-                    <th>Method</th>
-                    <th>Status Code</th>
-                    <th>Response Time (s)</th>
-                    <th>Security Warning</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for result in results if result.get('status_code') is not none %}
-                <tr>
-                    <td>{{ result.route }}</td>
-                    <td>{{ result.method }}</td>
-                    <td class="{{ 'success' if result.status_code < 400 else 'failure' }}">{{ result.status_code }}</td>
-                    <td>{{ result.response_time }}</td>
-                    <td>{{ result.security_warning if result.security_warning else '' }}</td>
-                </tr>
-                {% endfor %}
-                {% for result in results if result.get('status_code') is none %}
-                <tr>
-                    <td>{{ result.route }}</td>
-                    <td>{{ result.method }}</td>
-                    <td colspan="3" class="failure">Error: {{ result.error }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </body>
-    </html>
-    """
-
-    template = Template(html_template)
-    html_content = template.render(results=results)
-
-    with open(output_path, "w") as file:
-        file.write(html_content)
-
-# Exemplo de uso
+# Função principal para executar os testes e chamar o script geraR.py
 def main():
-    openapi_path = "openapi.json"  # Substitua pelo caminho correto
-    spec = load_openapi_spec(openapi_path)
-    base_url = "https://meusite_teste.net"  # Substitua pela URL base correta
+    display_banner()
+    base_url = input("Digite a URL base da API: ").strip()
+    configure_proxy()
 
-    # Obter rotas
-    routes = spec.get("routes", {})
+    paths = load_openapi_spec(input("Digite o caminho do arquivo OpenAPI ou URL: ").strip())
+    headers = configure_authentication(base_url)
 
-    # Testar as rotas
-    results = test_api_routes(base_url, routes)
+    display_loading_message()
+    test_api_routes(base_url, paths, headers)
 
-    # Gerar relatório em HTML
-    output_path = "api_test_report.html"
-    generate_html_report(results, output_path)
-    print(f"Relatório gerado em: {output_path}")
+    print("Testes concluídos. Gerando relatório com o script geraR.py...")
+
+    # Executar o script geraR.py
+    try:
+        subprocess.run(["python", "geraR.py"], check=True)
+        print("Relatório gerado com sucesso.")
+    except subprocess.CalledProcessError as e:
+        print(f"Erro ao executar geraR.py: {e}")
 
 if __name__ == "__main__":
     main()
