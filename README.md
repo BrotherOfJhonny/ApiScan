@@ -71,7 +71,7 @@ PROXIES = {
     "http": "http://127.0.0.1:8080",
     "https": "http://127.0.0.1:8080"
 }
-USE_PROXY = True  # Ative o proxy conforme necessário.
+USE_PROXY = False  # Ative o proxy conforme necessário.
 ```
 
 ### 3. Executar a Ferramenta
