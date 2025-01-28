@@ -1,10 +1,9 @@
 import requests
 import json
-import subprocess  # Para executar outro script Python
-from jinja2 import Template
 import urllib3
 import time
-import pandas as pd
+from datetime import datetime
+from geraR import generate_report  # Importando a função generate_report do script geraR.py
 
 # Desativar avisos de HTTPS não verificado
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -16,6 +15,10 @@ PROXIES = {
 }
 
 USE_PROXY = False  # Variável para ativar/desativar o proxy
+
+def log_message(message):
+    timestamp = datetime.now().strftime("[%Y-%m-%d %H:%M:%S]")
+    print(f"{timestamp} {message}")
 
 # Função para exibir o banner ASCII
 def display_banner():
@@ -164,13 +167,9 @@ def test_api_routes(base_url, paths, headers):
                     "error": str(e)
                 })
 
-    # Salvar respostas brutas em um arquivo local
-    with open("raw_responses.json", "w") as raw_file:
-        json.dump(raw_responses, raw_file, indent=4)
-
     return results
 
-# Função principal para executar os testes e chamar o script geraR.py
+# Função principal para executar os testes e gerar relatório
 def main():
     display_banner()
     base_url = input("Digite a URL base da API: ").strip()
@@ -180,16 +179,18 @@ def main():
     headers = configure_authentication(base_url)
 
     display_loading_message()
-    test_api_routes(base_url, paths, headers)
+    results = test_api_routes(base_url, paths, headers)
 
-    print("Testes concluídos. Gerando relatório com o script geraR.py...")
+    log_message("Testes concluídos. Gerando relatório...")
 
-    # Executar o script geraR.py
-    try:
-        subprocess.run(["python", "geraR.py"], check=True)
-        print("Relatório gerado com sucesso.")
-    except subprocess.CalledProcessError as e:
-        print(f"Erro ao executar geraR.py: {e}")
+    # Chamar a função diretamente para gerar o relatório
+    generate_report(results)
+
+    # Resumo
+    log_message("Resumo:")
+    log_message(f"- Endpoints testados: {len(results)}")
+    log_message(f"- Sucessos: {sum(1 for r in results if r.get('status_code') and r['status_code'] < 400)}")
+    log_message(f"- Falhas: {sum(1 for r in results if r.get('status_code') and r['status_code'] >= 400)}")
 
 if __name__ == "__main__":
     main()
