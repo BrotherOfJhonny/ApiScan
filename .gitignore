@@ -1,0 +1,19 @@
+# Python __pycache__ folders
+__pycache__/
+
+# Ignore compiled Python files
+*.py[cod]
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore virtual environment folders
+venv/
+.env/
+
+# Ignore IDE and editor settings
+.idea/
+.vscode/
+
+# Ignore macOS system files
+.DS_Store
