@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #######################################################################
-# Nome do Script: setup.sh
+# Nome do Script: run.sh
 # Descrição: Facilita a execução da ferramenta com comandos predefinidos.
 # Autor: https://github.com/jeanrafaellourenco
 # Data: 12/09/2023
